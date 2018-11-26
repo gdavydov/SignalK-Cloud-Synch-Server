@@ -1,0 +1,106 @@
+<?xml version='1.0'?>
+<!-- Licensed to the Apache Software Foundation (ASF) under one or more contributor 
+	license agreements. See the NOTICE file distributed with this work for additional 
+	information regarding copyright ownership. The ASF licenses this file to 
+	you under the Apache License, Version 2.0 (the "License"); you may not use 
+	this file except in compliance with the License. You may obtain a copy of 
+	the License at http://www.apache.org/licenses/LICENSE-2.0 Unless required 
+	by applicable law or agreed to in writing, software distributed under the 
+	License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS 
+	OF ANY KIND, either express or implied. See the License for the specific 
+	language governing permissions and limitations under the License. -->
+
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="urn:activemq" xsi:schemaLocation="urn:activemq /schema/artemis-server.xsd">
+
+	<core xmlns="urn:activemq:core">
+
+		<persistence-enabled>false</persistence-enabled>
+		<graceful-shutdown-timeout>5000</graceful-shutdown-timeout>
+		<connectors>
+			<connector name="in-vm">vm://0</connector>
+			<connector name="netty">tcp://localhost:61617</connector>
+
+		</connectors>
+
+		<acceptors>
+			<acceptor name="in-vm">vm://0</acceptor>
+			<acceptor name="netty">tcp://localhost:61617//</acceptor>
+<!-- <acceptor name="mqtt">tcp://0.0.0.0:1883?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;protocols=MQTT</acceptor>
+   <acceptor name="mqtts">tcp://0.0.0.0:8883?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;protocols=MQTT;sslEnabled=true;keyStorePath=/opt/keystore.jks;keyStorePassword=password</acceptor>
+</acceptors> -->
+		</acceptors>
+		
+		<address-settings>
+			<address-setting match="incoming.#">
+				<auto-create-queues>true</auto-create-queues>
+				<default-address-routing-type>ANYCAST</default-address-routing-type>
+				<auto-delete-queues>true</auto-delete-queues>
+				<expiry-delay>1000</expiry-delay>
+			</address-setting>
+			<address-setting match="outgoing.#">
+				<auto-create-queues>true</auto-create-queues>
+				<default-address-routing-type>ANYCAST</default-address-routing-type>
+				<auto-delete-queues>true</auto-delete-queues>
+				<expiry-delay>5000</expiry-delay>
+			</address-setting>
+		</address-settings>
+		<queues>
+			<queue name="incoming.raw">
+				<address>incoming.raw</address>
+				<durable>false</durable>
+			</queue>
+
+			<queue name="outgoing.reply">
+				<address>outgoing.reply</address>
+				<durable>false</durable>
+			</queue>
+		</queues>
+		<remoting-incoming-interceptors>
+			<!-- incoming -->
+			<class-name>nz.co.fortytwo.signalk.artemis.intercept.SessionInterceptor
+			</class-name>
+			<class-name>nz.co.fortytwo.signalk.artemis.intercept.GarbageInterceptor
+			</class-name>
+			<class-name>nz.co.fortytwo.signalk.artemis.intercept.NMEAMsgInterceptor
+			</class-name>
+			<class-name>nz.co.fortytwo.signalk.artemis.intercept.N2kMsgInterceptor
+			</class-name>
+			<class-name>nz.co.fortytwo.signalk.artemis.intercept.FullMsgInterceptor
+			</class-name>
+			<class-name>nz.co.fortytwo.signalk.artemis.intercept.SubscribeMsgInterceptor
+			</class-name>
+			<class-name>nz.co.fortytwo.signalk.artemis.intercept.DeltaSourceInterceptor
+			</class-name>
+			<class-name>nz.co.fortytwo.signalk.artemis.intercept.DeltaMsgInterceptor
+			</class-name>
+			<class-name>nz.co.fortytwo.signalk.artemis.intercept.GetMsgInterceptor
+			</class-name>
+		</remoting-incoming-interceptors>
+			<!-- outgoing -->
+<!-- 		<remoting-outgoing-interceptors> -->
+<!-- 			<class-name>nz.co.fortytwo.signalk.artemis.intercept.MapToDeltaInterceptor</class-name> -->
+<!-- 			<class-name>nz.co.fortytwo.signalk.artemis.intercept.MapToFullInterceptor</class-name> -->
+<!-- 		</remoting-outgoing-interceptors> -->
+
+		<!-- Other config -->
+		<security-enabled>false</security-enabled>
+		<security-settings>
+			<!--security for example queue -->
+			<security-setting match="incoming.raw">
+				<permission type="createDurableQueue" roles="guest" />
+				<permission type="createNonDurableQueue" roles="guest" />
+				<permission type="send" roles="guest" />
+			</security-setting>
+
+			<security-setting match="outgoing.#">
+				<permission type="createDurableQueue" roles="guest" />
+				<permission type="createNonDurableQueue" roles="guest" />
+				<permission type="consume" roles="guest" />
+				<permission type="send" roles="guest" />
+			</security-setting>
+			
+		</security-settings>
+
+	</core>
+</configuration>

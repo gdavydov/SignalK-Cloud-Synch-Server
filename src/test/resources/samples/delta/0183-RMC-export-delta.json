@@ -1,0 +1,24 @@
+{
+  "context": "vessels.366982330.navigation",
+  "updates": [
+    {
+      "values": [
+        
+        {
+          "path": "position",
+          "value": {
+            "longitude": 173.1693,
+            "latitude": -41.156426,
+            "altitude": 0
+          }
+        },
+        {
+          "path": "courseOverGroundTrue",
+          "value": 245.69
+        }
+      ],
+      "$source": "sources.gps_0183_RMC",
+      "timestamp":  "2015-03-07T12:37:10.523Z"
+    }
+  ]
+}

@@ -1,0 +1,131 @@
+{
+   "config": {
+      "hawtio": {
+         "authenticationEnabled": false,
+         "context": "/hawtio",
+         "port": 8000.0,
+         "start": false,
+         "war": "./hawtio/hawtio-default-offline-1.4.48.war"
+      },
+      "jolokia": {
+         "authenticationEnabled": false,
+         "context": "/jolokia",
+         "port": 8001.0,
+         "war": "./hawtio/jolokia-war-1.3.3.war"
+      },
+      "server": {
+         "admin": {
+            "password": "admin",
+            "user": "admin"
+         },
+         "apps": {
+            "install": {
+               "allow": true
+            },
+            "upgrade": {
+               "allow": true
+            }
+         },
+         "client": {
+            "mqtt": {
+               "connect": []
+            },
+            "stomp": {
+               "connect": []
+            },
+            "tcp": {
+               "connect": []
+            },
+            "ws": {
+               "connect": []
+            }
+         },
+         "clock": {
+            "src": "system"
+         },
+         "demo": {
+            "file": "motu.log",
+            "start": false
+         },
+         "files": {
+            "maps": {
+               "dir": "./mapcache/"
+            },
+            "static": {
+               "dir": "./signalk-static/"
+            },
+            "storage": {
+               "root": "./storage/"
+            },
+            "usb": {
+               "usbdrive": "/media/usb0"
+            }
+         },
+         "security": {
+            "config": {
+               "ip": ["10.1.1.40/8","127.0.0.1/8"]
+            },
+            "deny": {
+               "ip": []
+            },
+            "white": {
+               "ip": []
+            }
+         },
+         "serial": {
+            "baud": 38400.0,
+            "enable": true,
+            "ports": ["/dev/ttyUSB2","/dev/ttyACM0","/dev/ttyUSB0","/dev/ttyUSB1","/dev/ttyACM1","/dev/ttyACM2","/dev/ttyACM3"]
+         },
+         "server": {
+            "mqtt": {
+               "port": 1883.0,
+               "start": true
+            },
+            "nmea": {
+               "generate0183": true
+            },
+            "rest": {
+               "port": 8080.0
+            },
+            "stomp": {
+               "port": 61613.0,
+               "start": true
+            },
+            "tcp": {
+               "nmea": {
+                  "port": 55557.0
+               },
+               "port": 55555.0
+            },
+            "udp": {
+               "nmea": {
+                  "port": 55556.0
+               },
+               "port": 55554.0
+            },
+            "websocket": {
+               "port": 8080.0
+            },
+            "zeroconf": {
+               "auto": true
+            }
+         },
+         "version": "1.0.0",
+         "vessel": {
+            "flag": "NZ",
+            "mmsi": "",
+            "name": "Motu",
+            "port": "Nelson",
+            "registrations": {
+               "imo": "",
+               "local": [],
+               "national": [],
+               "other": []
+            },
+            "uuid": "urn:mrn:signalk:uuid:5da2f032-fc33-43f0-bc24-935bf55a17d1"
+         },
+         "xmpp": []
+      }
+   }
+}
