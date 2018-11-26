@@ -1,7 +1,7 @@
-Artemis Server
+SignalK cloud sych server
 ==============
 
-This is the replacement for the signalk-java-server which began long before signalk, and has become too difficult to support.
+This is the partially based on signalk-aretmis server.
 
 The artemis server leverages Java8+ async, lambdas, streams, and other new features of Java, resulting in a simpler implementation, better suited to signalk.
 
