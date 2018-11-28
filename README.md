@@ -12,11 +12,10 @@ Its a drop in replacement for the signalk-java-server, missing functionality is 
 It assumes influx db is running on localhost:8086
 
 After installing influxdb use the followong command.
+
 CREATE RETENTION POLICY signalk_retention ON signalk DURATION 156w REPLICATION 1
 
 It will keep local data for 3 years (156 weeks). It could  be changed to accomadate your particular requirements
-
-CREATE RETENTION POLICY signalk_retention ON signalk DURATION 156w REPLICATION 1
 
 
 REST API docs
