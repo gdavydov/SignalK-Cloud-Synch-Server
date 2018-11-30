@@ -140,6 +140,10 @@ public class InfluxDbService implements TDBService {
 		okhttp3.OkHttpClient.Builder client = (new okhttp3.OkHttpClient.Builder()).readTimeout(timeout, TimeUnit.MILLISECONDS);
 
 		influxDB = InfluxDBFactory.connect("http://localhost:8086", "admin", "admin", client);
+		
+		InfluxDBImpl a;
+		precision - RFC3339
+		format CSV
 
 		try {
 			if (!influxDB.databaseExists(dbName))
@@ -276,11 +280,11 @@ public class InfluxDbService implements TDBService {
 		return loadData(map, queryStr);
 	}
 
-	public NavigableMap<String, Json> dumpData(NavigableMap<String, Json> map, String table, Map<String, String> query, boolean parametersExist) {
-
+	public NavigableMap<String, Json> dumpData(NavigableMap<String, Json> map, String table, Map<String, String> query)
+	{
 		String _queryStr="select max(longValue) as longValue, doubleValue, strValue, nullValue, grp, owner "; //+table+getWhereString(query)+" group by uuid,skey,primary,sourceRef order by time desc"+ limit;
 		String queryStr=qBuilder.build(_queryStr, table,  query);
-		return loadData(map, queryStr);
+		return dumpData(map, queryStr);
 	}
 
 	@Override
@@ -544,6 +548,167 @@ public class InfluxDbService implements TDBService {
 		return map;
 	}
 
+	protected NavigableMap<String, Json> dumpData(NavigableMap<String, Json> map, String queryStr){
+		if (logger.isDebugEnabled())
+			logger.debug("queryStr: {}",queryStr);
+
+		Query query = new Query(queryStr, dbName);
+//		QueryResult result = influxDB.query(query, 5000, queryResult -> System.out.println(queryResult));
+		Consumer a;
+		influxDB.query(query, 5000, queryResult -> System.out.println(queryResult));
+		//NavigableMap<String, Json> map = new ConcurrentSkipListMap<>();
+		if (logger.isDebugEnabled())
+			logger.debug(result);
+		if(result==null || result.getResults()==null)
+			return map;
+
+		result.getResults().forEach((r)-> {
+			if (logger.isDebugEnabled())
+				logger.debug(r);
+			if(r==null||r.getSeries()==null)
+				return;
+			r.getSeries().forEach(
+				(s)->{
+					if (logger.isDebugEnabled())
+						logger.debug(s);
+					if(s==null)
+						return;
+
+
+					Map<String, String> tagMap = s.getTags();
+					String key = s.getName()+dot+tagMap.get("uuid")+dot+tagMap.get("skey");
+
+					Json val = null;
+					if (s.getValues().size() == 1)
+						val = getJsonValue(s,0);
+					else
+						val= getJsonValues(s,0);
+
+					//add timestamp and sourceRef
+					if(key.endsWith(".sentence")){
+						if (logger.isDebugEnabled())logger.debug("sentence: {}",val);
+						//make parent Json
+						String parentKey = StringUtils.substringBeforeLast(key,".");
+
+						Json parent = getParent(map,parentKey);
+
+						parent.set(sentence,val);
+
+						return;
+
+					}
+					if(key.contains(".meta.")){
+						//add meta to parent of value
+						if (logger.isDebugEnabled())logger.debug("meta: {}",val);
+						String parentKey = StringUtils.substringBeforeLast(key,".meta.");
+						String metaKey = StringUtils.substringAfterLast(key,".meta.");
+
+						//make parent Json
+						Json parent = getParent(map,parentKey);
+
+						//add attributes
+						addAtPath(parent,"meta."+metaKey, val);
+
+						return;
+					}
+					if(key.contains(".values.")){
+						//handle values
+						if (logger.isDebugEnabled())
+							logger.debug("key: {}, values: {}",key,val);
+						String parentKey = StringUtils.substringBeforeLast(key,".values.");
+						String valKey = StringUtils.substringAfterLast(key,".values.");
+						String subkey = StringUtils.substringAfterLast(valKey,".value.");
+
+						if (logger.isDebugEnabled())logger.debug("parentKey: {}, valKey: {}, subKey: {}",parentKey,valKey, subkey);
+						//make parent Json
+						Json parent = getParent(map,parentKey);
+
+						//add attributes
+						if (logger.isDebugEnabled())logger.debug("Primary value: {}",tagMap.get("primary"));
+						boolean primary = Boolean.valueOf((String)tagMap.get("primary"));
+						if(primary) {
+							if (val.isArray())
+								extractPrimaryValuesEx(parent,s, subkey,val,true);
+							else
+								extractPrimaryValue(parent,s,subkey,val,true);
+						}
+						else{
+
+							valKey=StringUtils.substringBeforeLast(valKey,".");
+							Json valuesJson = Util.getJson(parent,values, null );
+							Json subJson = valuesJson.at(valKey);
+							if(subJson==null){
+								subJson = Json.object();
+								valuesJson.set(valKey,subJson);
+							}
+
+							if (val.isArray())
+								extractValue(subJson,s,subkey, val, true);
+							else
+								extractValue(subJson,s,subkey, val, true);
+						}
+
+						return;
+					}
+					if((key.endsWith(".value")||key.contains(".value.")))
+					{
+						if (logger.isDebugEnabled())logger.debug("value: {}",val);
+						String parentKey = StringUtils.substringBeforeLast(key,".values.");
+						String subkey = StringUtils.substringAfterLast(key,".value.");
+
+						key = StringUtils.substringBeforeLast(key,".value");
+
+						if (logger.isDebugEnabled())logger.debug("parentKey: {}, valKey: {}, subKey: {}",parentKey, key, subkey);
+
+						//make parent Json
+						Json parent = getParent(map,key);
+						if (logger.isDebugEnabled())logger.debug("Primary value: {}",tagMap.get("primary"));
+						boolean primary = Boolean.valueOf((String)tagMap.get("primary"));
+						if(primary) {
+							if (val.isArray())
+								extractPrimaryValuesEx(parent,s, subkey,val,true);
+							else
+								extractPrimaryValue(parent,s,subkey,val,true);
+						}
+						else{
+							if (val.isArray())
+								extractValue(parent,s,subkey, val, true);
+							else
+								extractValue(parent,s,subkey, val, true);
+						}
+						//extractValue(parent,s, subkey, val);
+
+						map.put(key,parent);
+						return;
+					}
+
+					map.put(key,val);
+
+
+				});
+			});
+
+		// merge maps together
+/*
+		map.forEach((k,v) -> {
+			System.out.println ("key="+k+" Val="+v);
+		});
+*/
+		return map;
+	}
+
+	/**
+	 * https://docs.influxdata.com/influxdb/v1.6/guides/writing_data/
+	 * 
+	 * Note: If your data file has more than 5,000 points, it may be necessary to split that file into several files in order to write your data in batches to InfluxDB. By default, the HTTP request times out after five seconds. InfluxDB will still attempt to write the points after that time out but there will be no confirmation that they were successfully written.
+	 * 
+	 * @param fileName
+	 */
+	
+	private void writeBulkData(String fileName) {
+		
+	}
+	
 	private Json getParent(NavigableMap<String, Json> map, String parentKey)
 	{
 

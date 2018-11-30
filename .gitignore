@@ -1,0 +1,10 @@
+.classpath
+.project
+*.prefs
+*~
+/target/
+/logs/
+/activemq.log
+/signalk-static
+/.settings/
+

@@ -40,7 +40,7 @@ public interface TDBService {
 
 	public NavigableMap<String, Json> loadSources(NavigableMap<String, Json> map, Map<String,String> query);
 
-	public NavigableMap<String, Json> dumpData(NavigableMap<String, Json> map, String table, Map<String,String> query, boolean parameters);
+	public NavigableMap<String, Json> dumpData(NavigableMap<String, Json> map, String table, Map<String,String> queryParam);
 
 	public void save(NavigableMap<String, Json> map);
 

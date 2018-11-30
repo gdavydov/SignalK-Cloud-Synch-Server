@@ -134,7 +134,7 @@ public class CloudSynchService
  * Just for debug only
  * TODO remove
  */
-		parameters.put(TOTIME, "2018-08-20T03:20:03.0000Z");
+		parameters.put(FROMTIME, "2018-08-20T03:20:03.0000Z");
 		parameters.put(TOTIME, "2018-08-20T04:10:03.0000Z");
 /**
  * End debug section
@@ -142,7 +142,13 @@ public class CloudSynchService
 		parameters.put(RESOLUTION, ConfigUtils.getTime_resolution());
 		parameters.put(AGGREGATE_FUNCTION, ConfigUtils.getAggregate_function());
 		
-		map=tdbService.dumpData(map, dataSource, parameters, true);
+		map=tdbService.dumpData(map, dataSource, parameters);
+		
+		Json json = null;
+//			qUuid = StringUtils.substringAfter(ctx,dot);
+			json = SignalkMapConvertor.mapToUpdatesCSV(map, parameters);
+//			json.set(CONTEXT, ctx);
+
 		
 		serializeFromTime(now);
 		return map;

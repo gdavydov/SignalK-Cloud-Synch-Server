@@ -288,6 +288,13 @@ public class SignalkMapConvertor {
 		return root;
 	}
 
+	public static Json mapToUpdatesCSV(NavigableMap<String, Json> map, Map<String, String>qryParamsMap) {
+		if (logger.isDebugEnabled())
+			logger.debug("mapToUpdatesDeltaEx");
+		Map<String, Map<String, List<Json>>> deltaMap = mapToDeltaMapEx(map, qryParamsMap);
+		return generateCSVFile(deltaMap, UPDATES);
+	}
+
 	public static Json mapToUpdatesDeltaEx(NavigableMap<String, Json> map, Map<String, String>qryParamsMap) {
 		if (logger.isDebugEnabled())
 			logger.debug("mapToUpdatesDeltaEx");
@@ -569,4 +576,31 @@ public class SignalkMapConvertor {
 		return delta;
 	}
 
+	public static Json generateCSVFile(Map<String, Map<String, List<Json>>> msgs, String deltatype) {
+		if (logger.isDebugEnabled())
+			logger.debug("Delta map: {}", msgs);
+		Json delta = Json.object();
+
+		if (msgs == null || msgs.size() == 0)
+			return delta;
+
+		Json updatesArray = Json.array();
+		delta.set(deltatype, updatesArray);
+		
+		msgs.forEach((ts, srcRefs) -> {
+			
+			srcRefs.forEach((_srcRef, _values) -> {
+				if (logger.isDebugEnabled())
+					logger.debug("timestamp:{} sourceRef: {} values {}", ts, _srcRef, _values);
+
+				Json jValues = Json.object();
+				jValues.set(timestamp, ts);				
+				jValues.set(sourceRef, _srcRef);
+				jValues.set(values,  _values);
+				updatesArray.add(jValues);
+				System.out.println(updatesArray);
+			});
+		});
+		return delta;
+	}
 }
