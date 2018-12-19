@@ -4,8 +4,8 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>java.signalk.org</groupId>
 	<artifactId>signalk-data-colud-synch</artifactId>
-	<version>0.9.0-SNAPSHOT</version>
-	<name>artemis-server</name>
+	<version>0.1.0-SNAPSHOT</version>
+	<name>signalk-data-colud-synch-server</name>
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -305,6 +305,11 @@
 			<artifactId>commons-io</artifactId>
 			<version>2.4</version>
 		</dependency>
+        <dependency>
+            <groupId>jsch</groupId>
+            <artifactId>jsch</artifactId>
+            <version>0.1.55</version>
+        </dependency>
 
 		<!-- MIT -->
 		<dependency>
@@ -343,8 +348,7 @@
 			<version>2.2.8</version>
 			<scope>test</scope>
 		</dependency>
-
-	</dependencies>
+ 	</dependencies>
 	<build>
 		<plugins>
 			<plugin>

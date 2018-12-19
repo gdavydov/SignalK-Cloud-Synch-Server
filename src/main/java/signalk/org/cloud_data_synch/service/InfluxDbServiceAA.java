@@ -30,18 +30,9 @@ import static signalk.org.cloud_data_synch.utils.SignalKConstants.values;
 import static signalk.org.cloud_data_synch.utils.SignalKConstants.version;
 import static signalk.org.cloud_data_synch.utils.SignalKConstants.vessels;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -76,14 +67,13 @@ import okhttp3.OkHttpClient;
 
 import mjson.Json;
 
-public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBService
-{
+public class InfluxDbService implements TDBService {
 
 	private static final String STR_VALUE = "strValue";
 	private static final String LONG_VALUE = "longValue";
 	private static final String DOUBLE_VALUE = "doubleValue";
 	private static final String NULL_VALUE = "nullValue";
-	private static Logger logger = LogManager.getLogger(InfluxDbServiceEx.class);
+	private static Logger logger = LogManager.getLogger(InfluxDbService.class);
 	private static InfluxDB influxDB;
 	private static String dbName = "signalk";
 	private static TDBService instance;
@@ -94,26 +84,26 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 
 	QueryBuilder qBuilder = new QueryBuilder();
 
-	public InfluxDbServiceEx() {
+	public InfluxDbService() {
 		setUpTDb();
 	}
 
-	public InfluxDbServiceEx(String dbName) {
-		InfluxDbServiceEx.dbName=dbName;
+	public InfluxDbService(String dbName) {
+		InfluxDbService.dbName=dbName;
 		setUpTDb();
 	}
 
-	public InfluxDbServiceEx(String dbName, long timeout) {
-		InfluxDbServiceEx.dbName=dbName;
+	public InfluxDbService(String dbName, long timeout) {
+		InfluxDbService.dbName=dbName;
 		setUpTDb(timeout);
 	}
 
 	public static final TDBService setUpTDb(String dbName) {
-		return instance = new InfluxDbServiceEx(dbName);
+		return instance = new InfluxDbService(dbName);
 	}
 
 	public static final TDBService setUpTDb(String dbName, Long timeout) {
-		return instance = new InfluxDbServiceEx(dbName, timeout);
+		return instance = new InfluxDbService(dbName, timeout);
 	}
 
 	/* (non-Javadoc)
@@ -150,11 +140,11 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 		okhttp3.OkHttpClient.Builder client = (new okhttp3.OkHttpClient.Builder()).readTimeout(timeout, TimeUnit.MILLISECONDS);
 
 		influxDB = InfluxDBFactory.connect("http://localhost:8086", "admin", "admin", client);
-/*		
+		
 		InfluxDBImpl a;
 		precision - RFC3339
 		format CSV
-*/
+
 		try {
 			if (!influxDB.databaseExists(dbName))
 				influxDB.createDatabase(dbName);
@@ -290,11 +280,9 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 		return loadData(map, queryStr);
 	}
 
-	public NavigableMap<String, Json> dumpData(NavigableMap<String, Json> map, String table, Map<String, String> query) throws Exception
+	public NavigableMap<String, Json> dumpData(NavigableMap<String, Json> map, String table, Map<String, String> query)
 	{
-		String _queryStr="select max(longValue) as longValue, mean(doubleValue) as doubleValue "; //+table+getWhereString(query)+" group by uuid,skey,primary,sourceRef order by time desc"+ limit;
-		
-		
+		String _queryStr="select max(longValue) as longValue, doubleValue, strValue, nullValue, grp, owner "; //+table+getWhereString(query)+" group by uuid,skey,primary,sourceRef order by time desc"+ limit;
 		String queryStr=qBuilder.build(_queryStr, table,  query);
 		return dumpData(map, queryStr);
 	}
@@ -560,32 +548,20 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 		return map;
 	}
 
-	protected NavigableMap<String, Json> dumpData(NavigableMap<String, Json> map, String queryStr) throws Exception
-	{
-		
-		String charset = "UTF-8";
-		FileOutputStream fos = new FileOutputStream(new File("./cloud_dumps/", String.valueOf((new Date()).getTime())+".influxdb.dd"));
-		OutputStreamWriter osw = new OutputStreamWriter(fos, charset);
-		BufferedWriter bw = new BufferedWriter(osw);
-		PrintWriter pw = new PrintWriter(bw, false);
-//		pw.write("Some File Contents");
-				
+	protected NavigableMap<String, Json> dumpData(NavigableMap<String, Json> map, String queryStr){
 		if (logger.isDebugEnabled())
 			logger.debug("queryStr: {}",queryStr);
 
 		Query query = new Query(queryStr, dbName);
-		QueryResult result = influxDB.query(query);
 //		QueryResult result = influxDB.query(query, 5000, queryResult -> System.out.println(queryResult));
-
-//		influxDB.query(query, 5000, queryResult -> System.out.println(queryResult));
+		Consumer a;
+		influxDB.query(query, 5000, queryResult -> System.out.println(queryResult));
 		//NavigableMap<String, Json> map = new ConcurrentSkipListMap<>();
 		if (logger.isDebugEnabled())
 			logger.debug(result);
 		if(result==null || result.getResults()==null)
 			return map;
 
-		StringBuilder _sb = new StringBuilder();
-		
 		result.getResults().forEach((r)-> {
 			if (logger.isDebugEnabled())
 				logger.debug(r);
@@ -594,53 +570,13 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 			r.getSeries().forEach(
 				(s)->{
 					if (logger.isDebugEnabled())
-						logger.debug("=> {}:", s);
+						logger.debug(s);
 					if(s==null)
 						return;
 
-					Map<String, String> tags=s.getTags();
-					List<String> cols = s.getColumns();
-					List<List<Object>> vals= s.getValues();
-					
-					_sb.append(s.getName());
-					tags.forEach((k,v) -> {
-						if (v != null && !v.isEmpty()) {
-							_sb.append(",");
-							_sb.append(k).append('=').append(String.valueOf(v));
-						}
-					});
-					String separator=" ";
-					
-					vals.forEach((dataRow) -> {
-						int timePos = 0;
-	
-						for (int i = 0; i < cols.size();i++) {
-							Object _val = dataRow.get(i);
-							if (cols.get(i).equals("time")) {
-								timePos = i;
-								continue;
-							}
-							if (_val != null) {
-								_sb.append(separator);
-								_sb.append(cols.get(i)).append('=').append(String.valueOf(_val));
-								separator.replace(separator, ","); // stupdity of lambda expressions
-							}
-						}
 
-						_sb.append(' ');
-						_sb.append(Util.getMillisFromIsoTime(String.valueOf(dataRow.get(timePos))));
-							
-						try {
-							bw.write(_sb.toString());					
-						}
-						catch (IOException e) {
-							logger.catching(e);
-							return;
-						}
-						_sb.delete(0, _sb.length());
-					});
-/**					
-					String key = s.getName()+dot+tags.get("uuid")+dot+tags.get("skey");
+					Map<String, String> tagMap = s.getTags();
+					String key = s.getName()+dot+tagMap.get("uuid")+dot+tagMap.get("skey");
 
 					Json val = null;
 					if (s.getValues().size() == 1)
@@ -688,8 +624,8 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 						Json parent = getParent(map,parentKey);
 
 						//add attributes
-						if (logger.isDebugEnabled())logger.debug("Primary value: {}",tags.get("primary"));
-						boolean primary = Boolean.valueOf((String)tags.get("primary"));
+						if (logger.isDebugEnabled())logger.debug("Primary value: {}",tagMap.get("primary"));
+						boolean primary = Boolean.valueOf((String)tagMap.get("primary"));
 						if(primary) {
 							if (val.isArray())
 								extractPrimaryValuesEx(parent,s, subkey,val,true);
@@ -726,8 +662,8 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 
 						//make parent Json
 						Json parent = getParent(map,key);
-						if (logger.isDebugEnabled())logger.debug("Primary value: {}",tags.get("primary"));
-						boolean primary = Boolean.valueOf((String)tags.get("primary"));
+						if (logger.isDebugEnabled())logger.debug("Primary value: {}",tagMap.get("primary"));
+						boolean primary = Boolean.valueOf((String)tagMap.get("primary"));
 						if(primary) {
 							if (val.isArray())
 								extractPrimaryValuesEx(parent,s, subkey,val,true);
@@ -747,7 +683,7 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 					}
 
 					map.put(key,val);
-*/
+
 
 				});
 			});
@@ -1387,7 +1323,7 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 				point = Point.measurement(path[0]).time(millis, TimeUnit.MILLISECONDS)
 						.tag("sourceRef", sourceRef)
 						.tag("uuid", path[1])
-						.tag(InfluxDbServiceEx.PRIMARY_VALUE, isPrimary(key,sourceRef).toString())
+						.tag(InfluxDbService.PRIMARY_VALUE, isPrimary(key,sourceRef).toString())
 						.tag("skey", String.join(".", ArrayUtils.subarray(path, 1, path.length)));
 				influxDB.write(addPoint(point, field, val));
 				break;
@@ -1429,7 +1365,7 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 		Builder point = Point.measurement(path[0]).time(millis, TimeUnit.MILLISECONDS)
 				.tag("sourceRef", sourceRef)
 				.tag("uuid", path[1])
-				.tag(InfluxDbServiceEx.PRIMARY_VALUE, primary.toString())
+				.tag(InfluxDbService.PRIMARY_VALUE, primary.toString())
 				.tag("skey", String.join(".", ArrayUtils.subarray(path, 2, path.length)));
 		influxDB.write(addPoint(point, field, val));
 
@@ -1567,19 +1503,7 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 	}
 
 	public static void setDbName(String dbName) {
-		InfluxDbServiceEx.dbName = dbName;
-	}
-	
-	@Override
-	public void produce() throws Exception
-	{
-		
-	}
-
-	@Override
-	public void consume() throws Exception
-	{
-		
+		InfluxDbService.dbName = dbName;
 	}
 }
 
@@ -1602,7 +1526,7 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 class QueryBuilder
 {
 
-	private static Logger logger = LogManager.getLogger(InfluxDbServiceEx.class);
+	private static Logger logger = LogManager.getLogger(InfluxDbService.class);
 
 	private boolean trivialQuery=false;
 	private String timePeriod =DEFAULT_TIMEPERIOD;
@@ -1701,7 +1625,7 @@ class QueryBuilder
 		builder.append("from ")
 			.append(table)
 			.append(getWhereString(queryParams))
-			.append(" group by uuid,skey,primary,sourceRef,strValue,nullValue,")
+			.append(" group by uuid,skey,primary,sourceRef,")
 			.append("time(").append(timeResolution).append(")")
 			.append(" order by time ")
 			.append (sortOrder);
@@ -1816,5 +1740,9 @@ class QueryBuilder
 			}
 		}
 		return outTime;
+
+
+
 	}
+
 }
