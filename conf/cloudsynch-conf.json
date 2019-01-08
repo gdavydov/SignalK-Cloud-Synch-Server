@@ -1,20 +1,20 @@
 {
-    "server_type": "producer",
+    "server_type": "producer", /// for the local server, on a cloud it shouold be "consumer
     "transport": {
         "mqtt": {
             "use_transport": "WIFI",
-            "frequency": "1m",
-            "priority": "1"
+            "frequency": "1m",  // must be s=seconds, m= minutes or nothing for millisecs
+            "priority": "7"
         },
         "scp": {
             "use_transport": "MIFI",
             "frequency": "2m",
-            "priority": "2"
+            "priority": "1"
         },
         "sftp": {
             "use_transport": "WIFI",
             "frequency": "2m",
-            "priority": "3"
+            "priority": "2"
         },
         "ftp": {
             "use_transport": "MIFI",
@@ -23,119 +23,109 @@
         },
         "smtp": {
             "use_transport": "SATELLITE",
-            "frequency": "2h",
+            "frequency": "120m",
             "priority": "5"
-        }
-    },
-    "mqtt": {
-        "producer": {
-            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
-            "port": "25",
-            "user": "username goes here",
-            "password": "userpassword goes here",
-            "timeout": "30s",
-            "compress_data": "yes",
-            "class_name": "signalk.org.cloud_data_synch.service.mqtt"
         },
-        "consumer": {
-            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
-            "port": "25",
-            "user": "username goes here",
-            "password": "userpassword goes here",
-            "timeout": "30s",
-            "compress_data": "yes",
-            "class_name": "signalk.org.cloud_data_synch.service.mqtt"
+        "directdb": {
+            "use_transport": "WIFI",
+            "frequency": "1m",
+            "priority": "6"
         }
     },
-    "sftp": {
-        "producer": {
-            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
-            "port": "22",
-            "user": "username goes here",
-            "password": "userpassword goes here",
-            "target_folder": "/sss/sss/sss",
-            "timeout": "30s",
-            "compress_data": "yes",
-            "class_name": "signalk.org.cloud_data_synch.service.sftp"
-        },
-        "consumer": {
-            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
-            "port": "22",
-            "user": "username goes here",
-            "password": "userpassword goes here",
-            "target_folder": "/sss/sss/sss",
-            "timeout": "30s",
-            "compress_data": "yes",
-            "class_name": "signalk.org.cloud_data_synch.service.sftp"
-        }
+    "producers" :{
+	    "mqtt": {
+	//            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
+	            "host": "lad1pdaht2001.thehartford.com",
+	            "port": "25",
+	            "user": "username goes here",
+	            "password": "userpassword goes here",
+	            "timeout": "30s", // must be m=munites, s=seconds
+	            "compress_data": "yes",
+	            "class_name": "signalk.org.cloud_data_synch.service.producers.mqtt"
+	    },
+	    "sftp": {
+	            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
+	            "port": "22",
+	            "user": "username goes here",
+	            "password": "userpassword goes here",
+	            "keyfile" : "C:/Users/gd85376/.ssh/id_rsa",
+	            "timeout": "30s",
+	            "compress_data": "yes",
+	            "class_name": "signalk.org.cloud_data_synch.service.producers.sftp"
+	    },
+	    "ftp": {
+	            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
+	            "port": "22",
+	            "user": "username goes here",
+	            "password": "userpassword goes here",
+	            "keyfile" : "C:/Users/gd85376/.ssh/id_rsa",
+	            "timeout": "30s",
+	            "compress_data": "yes",
+	            "class_name": "signalk.org.cloud_data_synch.service.producers.ftp"
+	    },
+	    "scp": {
+	//            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
+	            "host": "lad1pdaht2001.thehartford.com",
+	            "port": "22",
+	            "user": "dmadmin",
+	            "password": "spring12",
+	            "keyfile" : "C:/Users/gd85376/.ssh/id_rsa",
+	            "timeout": "30s",
+	            "compress_data": "yes",
+	            "class_name": "signalk.org.cloud_data_synch.service.producers.scp"
+	    },
+	    "smtp": {
+	            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
+	            "port": "25",
+	            "user": "username goes here",
+	            "password": "userpassword goes here",
+	            "timeout": "10m",
+	            "compress_data": "no",
+	            "use_attachments": "no",
+	            "class_name": "signalk.org.cloud_data_synch.service.producers.smtp"
+	    },
+	    "directdb": {
+	            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
+	            "port": "8086",
+	            "user": "username goes here",
+	            "password": "userpassword goes here",
+	            "timeout": "10m",
+	            "compress_data": "no",
+	            "use_attachments": "no",
+	            "dbname": "signalK",
+	            "class_name": "signalk.org.cloud_data_synch.service.InfluxDbService"
+	    }
     },
-    "ftp": {
-        "producer": {
-            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
-            "port": "22",
-            "user": "username goes here",
-            "password": "userpassword goes here",
-            "target_folder": "/sss/sss/sss",
-            "timeout": "30s",
-            "compress_data": "yes",
-            "class_name": "signalk.org.cloud_data_synch.service.ftp"
-        },
-        "consumer": {
-            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
-            "port": "22",
-            "user": "username goes here",
-            "password": "userpassword goes here",
-            "target_folder": "/sss/sss/sss",
-            "timeout": "30s",
-            "compress_data": "yes",
-            "class_name": "signalk.org.cloud_data_synch.service.ftp"
-        }
+    // global consumers
+    "consumers" : {
+    	"file" : {
+	            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
+	            "port": "25",
+	            "user": "username goes here",
+	            "password": "userpassword goes here",
+	            "timeout": "30s",  // must be m=munites, s=seconds
+	            "compress_data": "yes",
+	            "class_name": "signalk.org.cloud_data_synch.service.InfluxDbService"
+    	},
+    	"smtp" : {
+	            "class_name": "signalk.org.cloud_data_synch.service.consumers.smtp"
+    	},
+    	"mqtt" : {
+	            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
+	            "port": "25",
+	            "user": "username goes here",
+	            "password": "userpassword goes here",
+	            "timeout": "30s",  // must be m=munites, s=seconds
+	            "compress_data": "yes",
+	            "class_name": "signalk.org.cloud_data_synch.service.consumers.mqtt"
+    	},
+    	"xgate": {
+	            "class_name": "signalk.org.cloud_data_synch.service.consumers.xgate"
+    	}
     },
-    "scp": {
-        "producer": {
-            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
-            "port": "21",
-            "user": "username goes here",
-            "password": "userpassword goes here",
-            "target_folder": "/sss/sss/sss",
-            "timeout": "30s",
-            "compress_data": "yes",
-            "class_name": "signalk.org.cloud_data_synch.service.scp"
-        },
-        "consumer": {
-            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
-            "port": "21",
-            "user": "username goes here",
-            "password": "userpassword goes here",
-            "target_folder": "/sss/sss/sss",
-            "timeout": "30s",
-            "compress_data": "yes",
-            "class_name": "signalk.org.cloud_data_synch.service.scp"
-        }
-    },
-    "smtp": {
-        "producer": {
-            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
-            "port": "25",
-            "user": "username goes here",
-            "password": "userpassword goes here",
-            "timeout": "10m",
-            "compress_data": "no",
-            "use_attachments": "no",
-            "class_name": "signalk.org.cloud_data_synch.service.smtp"
-        },
-        "consumer": {
-            "host": "ec2-34-222-123-234.us-west-2.compute.amazonaws.com",
-            "port": "25",
-            "user": "username goes here",
-            "password": "userpassword goes here",
-            "timeout": "10m",
-            "compress_data": "no",
-            "use_attachments": "no",
-            "class_name": "signalk.org.cloud_data_synch.service.smtp"
-        }
-    },
-    "connection_speed": {
+    "ping_speed": {
+    	"host" : "lad1pdaht2001.thehartford.com",
+        "timeout": "30s",
         "WIFI": "100",
         "MIFI": "300",
         "SATTELITE": "1000"
@@ -146,5 +136,9 @@
         "aggregate_function": "avg",
         "data_read_timeout" : "30000",
         "output_format": "delta"
+    },
+    "data_folders" : {
+        "producer_data_folder" :"./data_dumps",
+        "consumer_data_folder" :"~/in_data_dumps"
     }
 }

@@ -5,7 +5,8 @@ import java.util.NavigableMap;
 
 import mjson.Json;
 
-public interface TDBService {
+public interface TDBService
+{
 
 	public static TDBService setUpTDb(String dbName) {
 		return null;
@@ -40,7 +41,7 @@ public interface TDBService {
 
 	public NavigableMap<String, Json> loadSources(NavigableMap<String, Json> map, Map<String,String> query);
 
-	public NavigableMap<String, Json> dumpData(NavigableMap<String, Json> map, String table, Map<String,String> queryParam);
+	public String dumpData(NavigableMap<String, Json> map, String table, Map<String,String> queryParam) throws Exception;
 
 	public void save(NavigableMap<String, Json> map);
 

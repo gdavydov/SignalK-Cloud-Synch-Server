@@ -29,11 +29,14 @@ import static signalk.org.cloud_data_synch.utils.SignalKConstants.value;
 import static signalk.org.cloud_data_synch.utils.SignalKConstants.values;
 import static signalk.org.cloud_data_synch.utils.SignalKConstants.version;
 import static signalk.org.cloud_data_synch.utils.SignalKConstants.vessels;
+import static signalk.org.cloud_data_synch.utils.ConfigUtils.DEFAULT_DATA_LOCATION;
 
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
@@ -41,7 +44,9 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -55,6 +60,7 @@ import mjson.Json;
 import okhttp3.OkHttpClient;
 import signalk.org.cloud_data_synch.utils.Config;
 import signalk.org.cloud_data_synch.utils.ConfigConstants;
+import signalk.org.cloud_data_synch.utils.ConfigUtils;
 import signalk.org.cloud_data_synch.utils.Util;
 
 import org.apache.commons.lang3.ArrayUtils;
@@ -69,21 +75,59 @@ import org.influxdb.dto.Point;
 import org.influxdb.dto.Point.Builder;
 import org.influxdb.dto.Query;
 import org.influxdb.dto.QueryResult;
+import org.influxdb.dto.QueryResult.Result;
 import org.influxdb.dto.QueryResult.Series;
 import org.joda.time.DateTime;
 import org.joda.time.format.ISODateTimeFormat;
-import okhttp3.OkHttpClient;
 
-import mjson.Json;
-
-public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBService
+public class InfluxDbService extends SignalKCloudSynchService implements TDBService
 {
 
 	private static final String STR_VALUE = "strValue";
 	private static final String LONG_VALUE = "longValue";
 	private static final String DOUBLE_VALUE = "doubleValue";
 	private static final String NULL_VALUE = "nullValue";
-	private static Logger logger = LogManager.getLogger(InfluxDbServiceEx.class);
+	private static final String STR_VALUE_SHORT = "sV";
+	private static final String LONG_VALUE_SHORT = "lV";
+	private static final String DOUBLE_VALUE_SHORT = "dV";
+	private static final String NULL_VALUE_SHORT = "nV";
+	private static final String SRC_REF_SHORT = "ref";
+	private static final String PRIMARY = "primary";
+	private static final String PRIMARY_SHORT = "prim";
+	private static final String SOURCE_REF = "sourceRef";
+	private static final String SOURCE_REF_SHORT = "src";
+
+	private static final String TAGS = "tags";
+	private static final String VALUES = "vals";
+	private static final String SERIES = "ser";
+	private static final String RESULT = "result";
+	
+	private static Map<String, String>forwardConversionMap = new HashMap<String, String>();
+	static {
+		forwardConversionMap.put(STR_VALUE, STR_VALUE_SHORT);
+		forwardConversionMap.put(LONG_VALUE, LONG_VALUE_SHORT);
+		forwardConversionMap.put(DOUBLE_VALUE, DOUBLE_VALUE_SHORT);
+		forwardConversionMap.put(NULL_VALUE, NULL_VALUE_SHORT);
+		forwardConversionMap.put(SOURCE_REF, SOURCE_REF_SHORT);
+		forwardConversionMap.put(PRIMARY, PRIMARY_SHORT);
+		forwardConversionMap.put(uuid, uuid);
+		forwardConversionMap.put(skey, skey);
+		
+	}
+
+	private static Map<String, String>backConversionMap = new HashMap<String, String>();
+	static {
+		backConversionMap.put(STR_VALUE_SHORT, STR_VALUE);
+		backConversionMap.put(LONG_VALUE_SHORT, LONG_VALUE);
+		backConversionMap.put(DOUBLE_VALUE_SHORT, DOUBLE_VALUE);
+		backConversionMap.put(NULL_VALUE_SHORT, NULL_VALUE);
+		backConversionMap.put(SOURCE_REF_SHORT, SOURCE_REF);
+		backConversionMap.put(PRIMARY_SHORT, PRIMARY);
+		backConversionMap.put(uuid, uuid);
+		backConversionMap.put(skey, skey);
+	}
+	
+	private static Logger logger = LogManager.getLogger(InfluxDbService.class);
 	private static InfluxDB influxDB;
 	private static String dbName = "signalk";
 	private static TDBService instance;
@@ -94,26 +138,26 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 
 	QueryBuilder qBuilder = new QueryBuilder();
 
-	public InfluxDbServiceEx() {
+	public InfluxDbService() {
 		setUpTDb();
 	}
 
-	public InfluxDbServiceEx(String dbName) {
-		InfluxDbServiceEx.dbName=dbName;
+	public InfluxDbService(String dbName) {
+		InfluxDbService.dbName=dbName;
 		setUpTDb();
 	}
 
-	public InfluxDbServiceEx(String dbName, long timeout) {
-		InfluxDbServiceEx.dbName=dbName;
+	public InfluxDbService(String dbName, long timeout) {
+		InfluxDbService.dbName=dbName;
 		setUpTDb(timeout);
 	}
 
 	public static final TDBService setUpTDb(String dbName) {
-		return instance = new InfluxDbServiceEx(dbName);
+		return instance = new InfluxDbService(dbName);
 	}
 
 	public static final TDBService setUpTDb(String dbName, Long timeout) {
-		return instance = new InfluxDbServiceEx(dbName, timeout);
+		return instance = new InfluxDbService(dbName, timeout);
 	}
 
 	/* (non-Javadoc)
@@ -290,7 +334,7 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 		return loadData(map, queryStr);
 	}
 
-	public NavigableMap<String, Json> dumpData(NavigableMap<String, Json> map, String table, Map<String, String> query) throws Exception
+	public String dumpData(NavigableMap<String, Json> map, String table, Map<String, String> query) throws Exception
 	{
 		String _queryStr="select max(longValue) as longValue, mean(doubleValue) as doubleValue "; //+table+getWhereString(query)+" group by uuid,skey,primary,sourceRef order by time desc"+ limit;
 		
@@ -560,206 +604,187 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 		return map;
 	}
 
-	protected NavigableMap<String, Json> dumpData(NavigableMap<String, Json> map, String queryStr) throws Exception
+	/**
+	 * 
+	 * @param map
+	 * @param queryStr 
+	 * @return fileName with data dumps
+	 * @throws Exception
+	 * 
+	 * Also see https://www.programcreek.com/java-api-examples/?api=org.influxdb.dto.QueryResult
+	 */
+	protected String dumpData(NavigableMap<String, Json> map, String queryStr) throws Exception
 	{
-		
-		String charset = "UTF-8";
-		FileOutputStream fos = new FileOutputStream(new File("./cloud_dumps/", String.valueOf((new Date()).getTime())+".influxdb.dd"));
-		OutputStreamWriter osw = new OutputStreamWriter(fos, charset);
-		BufferedWriter bw = new BufferedWriter(osw);
-		PrintWriter pw = new PrintWriter(bw, false);
-//		pw.write("Some File Contents");
-				
 		if (logger.isDebugEnabled())
-			logger.debug("queryStr: {}",queryStr);
+			logger.debug("queryStr: {}", queryStr);
 
 		Query query = new Query(queryStr, dbName);
 		QueryResult result = influxDB.query(query);
-//		QueryResult result = influxDB.query(query, 5000, queryResult -> System.out.println(queryResult));
+		ArrayList<QueryResult.Result> aa= (ArrayList<QueryResult.Result>)result.getResults();
+		
+		
+		// QueryResult result = influxDB.query(query, 5000, queryResult ->
+		// System.out.println(queryResult));
 
-//		influxDB.query(query, 5000, queryResult -> System.out.println(queryResult));
-		//NavigableMap<String, Json> map = new ConcurrentSkipListMap<>();
+		// influxDB.query(query, 5000, queryResult ->
+		// System.out.println(queryResult));
+		// NavigableMap<String, Json> map = new ConcurrentSkipListMap<>();
 		if (logger.isDebugEnabled())
 			logger.debug(result);
-		if(result==null || result.getResults()==null)
-			return map;
+		
+		if (result == null || result.getResults() == null)
+			return null;
+		
+//		return formatDumpFile(result);
+		
+		return serializeDataDumpResults(result);
+	}
+	
+	private String formatDumpFile(QueryResult result) throws Exception
+	{
+		String charset = "UTF-8";
+		PrintWriter pw;
+
+		String fileName = String.valueOf((new Date()).getTime()) + ".influxdb." + ConfigUtils.DEFAULT_DATA_FILE_EXTENTION;
+
+		File dd = new File(ConfigUtils.getProducerDataFolder(), fileName);
+		
+		if (logger.isDebugEnabled())
+			logger.debug("Will dump data into the {}", dd.getCanonicalFile());
+
+		FileOutputStream fos = new FileOutputStream(dd);
+		pw = new PrintWriter(new BufferedWriter(new OutputStreamWriter(fos, charset)), false);
 
 		StringBuilder _sb = new StringBuilder();
-		
-		result.getResults().forEach((r)-> {
+
+		result.getResults().forEach((r) -> {
 			if (logger.isDebugEnabled())
 				logger.debug(r);
-			if(r==null||r.getSeries()==null)
-				return;
-			r.getSeries().forEach(
-				(s)->{
-					if (logger.isDebugEnabled())
-						logger.debug("=> {}:", s);
-					if(s==null)
-						return;
 
-					Map<String, String> tags=s.getTags();
-					List<String> cols = s.getColumns();
-					List<List<Object>> vals= s.getValues();
-					
+			// if(r==null||r.getSeries()==null)
+			// return;
+
+			r.getSeries().forEach((s) -> {
+				if (logger.isDebugEnabled())
+					logger.debug(" {}:", s);
+				if (s == null)
+					return;
+
+				Map<String, String> tags = s.getTags();
+				List<String> cols = s.getColumns();
+				List<List<Object>> vals = s.getValues();
+				/*
+				 * _sb.append(s.getName()); tags.forEach((k,v) -> { if (v !=
+				 * null && !v.isEmpty()) { _sb.append(",");
+				 * _sb.append(k).append('=').append(String.valueOf(v)); } });
+				 * String separator=" ";
+				 */
+				vals.forEach((dataRow) -> {
+
 					_sb.append(s.getName());
-					tags.forEach((k,v) -> {
+					tags.forEach((k, v) -> {
 						if (v != null && !v.isEmpty()) {
 							_sb.append(",");
 							_sb.append(k).append('=').append(String.valueOf(v));
 						}
 					});
-					String separator=" ";
-					
-					vals.forEach((dataRow) -> {
-						int timePos = 0;
-	
-						for (int i = 0; i < cols.size();i++) {
-							Object _val = dataRow.get(i);
-							if (cols.get(i).equals("time")) {
-								timePos = i;
-								continue;
-							}
-							if (_val != null) {
-								_sb.append(separator);
-								_sb.append(cols.get(i)).append('=').append(String.valueOf(_val));
-								separator.replace(separator, ","); // stupdity of lambda expressions
-							}
+					String separator = " ";
+					int timePos = 0;
+
+					for (int i = 0; i < cols.size(); i++) {
+						Object _val = dataRow.get(i);
+						if (cols.get(i).equals("time")) {
+							timePos = i;
+							continue;
 						}
-
-						_sb.append(' ');
-						_sb.append(Util.getMillisFromIsoTime(String.valueOf(dataRow.get(timePos))));
-							
-						try {
-							bw.write(_sb.toString());					
+						if (_val != null) {
+							_sb.append(separator);
+							_sb.append(cols.get(i)).append('=').append(String.valueOf(_val));
+							separator.replace(separator, ","); // stupidity of
+							                                   // lambda
+							                                   // expressions
 						}
-						catch (IOException e) {
-							logger.catching(e);
-							return;
-						}
-						_sb.delete(0, _sb.length());
-					});
-/**					
-					String key = s.getName()+dot+tags.get("uuid")+dot+tags.get("skey");
-
-					Json val = null;
-					if (s.getValues().size() == 1)
-						val = getJsonValue(s,0);
-					else
-						val= getJsonValues(s,0);
-
-					//add timestamp and sourceRef
-					if(key.endsWith(".sentence")){
-						if (logger.isDebugEnabled())logger.debug("sentence: {}",val);
-						//make parent Json
-						String parentKey = StringUtils.substringBeforeLast(key,".");
-
-						Json parent = getParent(map,parentKey);
-
-						parent.set(sentence,val);
-
-						return;
-
-					}
-					if(key.contains(".meta.")){
-						//add meta to parent of value
-						if (logger.isDebugEnabled())logger.debug("meta: {}",val);
-						String parentKey = StringUtils.substringBeforeLast(key,".meta.");
-						String metaKey = StringUtils.substringAfterLast(key,".meta.");
-
-						//make parent Json
-						Json parent = getParent(map,parentKey);
-
-						//add attributes
-						addAtPath(parent,"meta."+metaKey, val);
-
-						return;
-					}
-					if(key.contains(".values.")){
-						//handle values
-						if (logger.isDebugEnabled())
-							logger.debug("key: {}, values: {}",key,val);
-						String parentKey = StringUtils.substringBeforeLast(key,".values.");
-						String valKey = StringUtils.substringAfterLast(key,".values.");
-						String subkey = StringUtils.substringAfterLast(valKey,".value.");
-
-						if (logger.isDebugEnabled())logger.debug("parentKey: {}, valKey: {}, subKey: {}",parentKey,valKey, subkey);
-						//make parent Json
-						Json parent = getParent(map,parentKey);
-
-						//add attributes
-						if (logger.isDebugEnabled())logger.debug("Primary value: {}",tags.get("primary"));
-						boolean primary = Boolean.valueOf((String)tags.get("primary"));
-						if(primary) {
-							if (val.isArray())
-								extractPrimaryValuesEx(parent,s, subkey,val,true);
-							else
-								extractPrimaryValue(parent,s,subkey,val,true);
-						}
-						else{
-
-							valKey=StringUtils.substringBeforeLast(valKey,".");
-							Json valuesJson = Util.getJson(parent,values, null );
-							Json subJson = valuesJson.at(valKey);
-							if(subJson==null){
-								subJson = Json.object();
-								valuesJson.set(valKey,subJson);
-							}
-
-							if (val.isArray())
-								extractValue(subJson,s,subkey, val, true);
-							else
-								extractValue(subJson,s,subkey, val, true);
-						}
-
-						return;
-					}
-					if((key.endsWith(".value")||key.contains(".value.")))
-					{
-						if (logger.isDebugEnabled())logger.debug("value: {}",val);
-						String parentKey = StringUtils.substringBeforeLast(key,".values.");
-						String subkey = StringUtils.substringAfterLast(key,".value.");
-
-						key = StringUtils.substringBeforeLast(key,".value");
-
-						if (logger.isDebugEnabled())logger.debug("parentKey: {}, valKey: {}, subKey: {}",parentKey, key, subkey);
-
-						//make parent Json
-						Json parent = getParent(map,key);
-						if (logger.isDebugEnabled())logger.debug("Primary value: {}",tags.get("primary"));
-						boolean primary = Boolean.valueOf((String)tags.get("primary"));
-						if(primary) {
-							if (val.isArray())
-								extractPrimaryValuesEx(parent,s, subkey,val,true);
-							else
-								extractPrimaryValue(parent,s,subkey,val,true);
-						}
-						else{
-							if (val.isArray())
-								extractValue(parent,s,subkey, val, true);
-							else
-								extractValue(parent,s,subkey, val, true);
-						}
-						//extractValue(parent,s, subkey, val);
-
-						map.put(key,parent);
-						return;
 					}
 
-					map.put(key,val);
-*/
+					_sb.append(' ');
+					_sb.append(Util.getMillisFromIsoTime(String.valueOf(dataRow.get(timePos))));
 
+					// try {
+					_sb.append("\r");
+					pw.write(_sb.toString());
+					// }
+					// catch (IOException e) {
+					// logger.catching(e);
+					// return;
+					// }
+					_sb.delete(0, _sb.length());
 				});
 			});
-
-		// merge maps together
-/*
-		map.forEach((k,v) -> {
-			System.out.println ("key="+k+" Val="+v);
 		});
-*/
-		return map;
+		pw.flush();
+		pw.close();
+		// dd.renameTo(new File(ConfigUtils.getProducerDataFolder(), fileName));
+		/*
+		 * map.forEach((k,v) -> { System.out.println ("key="+k+" Val="+v); });
+		 */
+		return ConfigUtils.getProducerDataFolder() + "/" + fileName;
+
 	}
+
+	private String serializeDataDumpResults(QueryResult result) throws Exception
+	{
+		String charset = "UTF-8";
+		PrintWriter pw;
+		
+		Json seriesArray=Json.array();
+
+		String fileName = String.valueOf((new Date()).getTime()) + ".influxdb." + ConfigUtils.DEFAULT_DATA_FILE_EXTENTION;
+
+		File dd = new File(ConfigUtils.getProducerDataFolder(), fileName);
+		
+		if (logger.isDebugEnabled())
+			logger.debug("Will dump data into the {}", dd.getCanonicalFile());
+
+		FileOutputStream fos = new FileOutputStream(dd);
+		pw = new PrintWriter(new BufferedWriter(new OutputStreamWriter(fos, charset)), false);
+
+		StringBuilder _sb = new StringBuilder();
+
+		result.getResults().forEach((r) -> {
+			if (logger.isDebugEnabled())
+				logger.debug(r);
+
+			// if(r==null||r.getSeries()==null)
+			// return;
+			
+			r.getSeries().forEach((s) -> {
+				if (logger.isDebugEnabled())
+					logger.debug(" {}:", s);
+				if (s == null)
+					return;
+
+				 Json ser = getJsonValues(s);
+				 seriesArray.add(Json.object(s.getName(),ser));
+//				 seriesArray.set("name",s.getName());
+//				 try {
+//					_sb.append("\r");
+//					pw.write(_sb.toString());
+					// }
+					// catch (IOException e) {
+					// logger.catching(e);
+					// return;
+					// }
+//					_sb.delete(0, _sb.length());
+
+			});
+	    });
+		
+		pw.write(Json.object(RESULT,seriesArray).toString());
+		pw.flush();
+		pw.close();
+		return ConfigUtils.getProducerDataFolder() + "/" + fileName;
+	}
+
 
 	/**
 	 * https://docs.influxdata.com/influxdb/v1.6/guides/writing_data/
@@ -826,7 +851,7 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 		return (s.getValues().get(row)).get(i);
 	}
 
-	private Object getValueEx(String field, Series s, int row, List<Object> vals) {
+	private Object getValueEx(String field, Series s, List<Object> vals) {
 
 		for (int i = 0; i < s.getColumns().size(); i++) {
 			String v = s.getColumns().get(i);
@@ -894,26 +919,26 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 			if (logger.isDebugEnabled())
 			 logger.debug("getJsonValues : Recieved value row {} value {}", row, v);
 
-			Object ts = getValueEx("time", s, 0, v);
+			Object ts = getValueEx("time", s, v);
 			if (ts != null) {
 				// make predictable 3 digit nano ISO format
 				ts = Util.getIsoTimeString(DateTime.parse((String)ts, ISODateTimeFormat.dateTimeParser()).getMillis());
 //				node.set(timestamp, Json.make(ts));
 			}
 
-			Object obj = getValueEx(LONG_VALUE, s, 0, v);
+			Object obj = getValueEx(LONG_VALUE, s,v);
 			if (obj != null)
 				arrayOfValues.add(Json.object(ts,Math.round((Double) obj)));
 
-			obj = getValueEx(NULL_VALUE, s, 0, v);
+			obj = getValueEx(NULL_VALUE, s, v);
 			if (obj != null && Boolean.valueOf((String)obj))
 				arrayOfValues.add(Json.object(ts,Json.nil()));
 
-			obj = getValueEx(DOUBLE_VALUE, s, 0, v);
+			obj = getValueEx(DOUBLE_VALUE, s, v);
 			if (obj != null)
 				arrayOfValues.add(Json.object(ts, obj));
 
-			obj = getValueEx(STR_VALUE, s, 0, v);
+			obj = getValueEx(STR_VALUE, s, v);
 			if (obj != null) {
 				if (obj.equals("true")) {
 					arrayOfValues.add(Json.object(ts,"true"));
@@ -931,6 +956,72 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 
 		return arrayOfValues;
 
+	}
+
+	private Json getJsonValues(Series s)
+	{
+		Json singleSeries = Json.array();
+		Json tags = Json.array();
+		Json arrayOfValues = Json.array();
+		Json tagSet = Json.object();
+
+		if (logger.isDebugEnabled())
+			logger.debug("getJsonValues : Return values size {} skey {}", s.getValues().size(), s.getTags().get(skey));
+
+		s.getTags().forEach((k,v) -> {
+			if (forwardConversionMap.containsKey(k))
+				tagSet.set(forwardConversionMap.get(k),v);
+			else {
+				tagSet.set(k,v);
+				logger.error("Tag {} has not been converted. Missing short value",  k);
+			}	
+		});
+		
+		singleSeries.add(Json.object(TAGS, tagSet));
+		
+		s.getValues().forEach((v) -> {
+
+			Json singleValue = Json.object();
+
+			if (logger.isDebugEnabled())
+			 logger.debug("getJsonValues : Recieved value  value {}", v);
+
+			Object ts = getValueEx("time", s, v);
+			if (ts != null) {
+				long millis = new DateTime( ts ).getMillis();
+				// make predictable 3 digit nano ISO format
+				ts = Util.getIsoTimeString(DateTime.parse((String)ts, ISODateTimeFormat.dateTimeParser()).getMillis());
+				singleValue.set("ts",millis);
+			}
+
+			Object obj = getValueEx(LONG_VALUE, s, v);
+			if (obj != null)
+				singleValue.set(LONG_VALUE_SHORT,Math.round((Double) obj));
+
+			obj = getValueEx(NULL_VALUE, s, v);
+			if (obj != null && Boolean.valueOf((String)obj))
+				singleValue.set(NULL_VALUE_SHORT,Json.nil());
+
+			obj = getValueEx(DOUBLE_VALUE, s, v);
+			if (obj != null)
+				singleValue.set(DOUBLE_VALUE_SHORT, obj);
+
+			obj = getValueEx(STR_VALUE, s, v);
+			if (obj != null) {
+				if (obj.equals("true")) {
+					singleValue.set(STR_VALUE_SHORT,"true");
+				}
+				if (obj.equals("false")) {
+					singleValue.set(STR_VALUE_SHORT, "false");
+				}
+				if (obj.toString().trim().startsWith("[") && obj.toString().endsWith("]")) {
+					singleValue.set(STR_VALUE_SHORT, Json.read(obj.toString()));
+				}
+			}
+			arrayOfValues.add(singleValue);
+		});
+		singleSeries.add(Json.object(VALUES, arrayOfValues));
+		return Json.object(SERIES,singleSeries);
 	}
 
 	/* (non-Javadoc)
@@ -1387,7 +1478,7 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 				point = Point.measurement(path[0]).time(millis, TimeUnit.MILLISECONDS)
 						.tag("sourceRef", sourceRef)
 						.tag("uuid", path[1])
-						.tag(InfluxDbServiceEx.PRIMARY_VALUE, isPrimary(key,sourceRef).toString())
+						.tag(InfluxDbService.PRIMARY_VALUE, isPrimary(key,sourceRef).toString())
 						.tag("skey", String.join(".", ArrayUtils.subarray(path, 1, path.length)));
 				influxDB.write(addPoint(point, field, val));
 				break;
@@ -1429,7 +1520,7 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 		Builder point = Point.measurement(path[0]).time(millis, TimeUnit.MILLISECONDS)
 				.tag("sourceRef", sourceRef)
 				.tag("uuid", path[1])
-				.tag(InfluxDbServiceEx.PRIMARY_VALUE, primary.toString())
+				.tag(InfluxDbService.PRIMARY_VALUE, primary.toString())
 				.tag("skey", String.join(".", ArrayUtils.subarray(path, 2, path.length)));
 		influxDB.write(addPoint(point, field, val));
 
@@ -1567,18 +1658,20 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 	}
 
 	public static void setDbName(String dbName) {
-		InfluxDbServiceEx.dbName = dbName;
+		InfluxDbService.dbName = dbName;
 	}
 	
 	@Override
-	public void produce() throws Exception
+	public long produce(Object _obj) throws Exception
 	{
+		return 0;
 		
 	}
 
 	@Override
-	public void consume() throws Exception
+	public long consume() throws Exception
 	{
+		return 0;
 		
 	}
 }
@@ -1602,7 +1695,7 @@ public class InfluxDbServiceEx extends SignalKCloudSynchService implements TDBSe
 class QueryBuilder
 {
 
-	private static Logger logger = LogManager.getLogger(InfluxDbServiceEx.class);
+	private static Logger logger = LogManager.getLogger(InfluxDbService.class);
 
 	private boolean trivialQuery=false;
 	private String timePeriod =DEFAULT_TIMEPERIOD;

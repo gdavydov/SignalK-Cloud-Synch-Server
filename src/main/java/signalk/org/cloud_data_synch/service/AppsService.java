@@ -33,17 +33,10 @@ import org.asynchttpclient.AsyncCompletionHandler;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.HttpResponseBodyPart;
 
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.enums.ParameterIn;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import mjson.Json;
 import signalk.org.cloud_data_synch.utils.Util;
 
 @Path("/signalk/v1/apps")
-@Tag(name = "Webapp management API")
 public class AppsService extends BaseApiService {
 	
 	private static final int BUFFER_SIZE = 4096;
@@ -57,13 +50,6 @@ public class AppsService extends BaseApiService {
 
 	@GET
 	@Path("list")
-	@Operation(summary = "Return a list of installed webapps", 
-		description = "Concatenates the package.json files from the installed apps as a json array ")
-	@ApiResponses ({
-	    @ApiResponse(responseCode = "200", description = "Successful retrieval of apps list"),
-	    @ApiResponse(responseCode = "500", description = "Internal server error"),
-	    @ApiResponse(responseCode = "403", description = "No permission")
-	    })
 	@Produces(MediaType.APPLICATION_JSON)
 	
 	public Response list(@Parameter(in = ParameterIn.COOKIE, name = SK_TOKEN) @CookieParam(SK_TOKEN) Cookie cookie) {

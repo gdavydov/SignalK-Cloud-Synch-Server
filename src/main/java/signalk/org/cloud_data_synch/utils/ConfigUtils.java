@@ -1,10 +1,12 @@
 package signalk.org.cloud_data_synch.utils;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -25,7 +27,10 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.impl.crypto.MacProvider;
 import mjson.Json;
+import signalk.org.cloud_data_synch.service.SignalKCloudSynchService;
+import signalk.org.cloud_data_synch.service.SignalKCloudSynchServiceFactory;
 import signalk.org.cloud_data_synch.service.TDBService;
+import signalk.org.cloud_data_synch.utils.ConfigUtils.SynchConfigObject;
 import signalk.org.cloud_data_synch.utils.PasswordStorage.CannotPerformOperationException;
 
 public final class ConfigUtils {
@@ -55,15 +60,22 @@ public final class ConfigUtils {
 	public static final String PASSWORD  = "password";
 	public static final String TIMEOUT   = "timeout";
 	public static final String COMPRESS  = "compress_data";
+	public static final String COMPRESSED_EXT  = ".zip";
+	
 	public static final String USE_ATTACHMENTS = "use_attachments";
 	public static final String CLASS_NAME = "class_name";
 	public static final String EXEC_CLASS = "exec_class";
 	public static final String DATA_SOURCE = "data_source";
+	public static final String DATABASE_NAME = "dbname";
+	public static final String KEY_FILE = "keyfile";
 	
 	public static final String FREQUENCY = "frequency";
 	public static final String PRIORITY  = "priority";
 	
-	public static final String CONNECTION_SPEED   = "connection_speed";
+	
+	public static final String PRODUCERS  = "producers";
+	public static final String CONSUMERS  = "consumers";
+	public static final String PING_SPEED   = "ping_speed";
 	public static final String WIFI               = "WIFI";
 	public static final String MIFI                = "MIFI";
 	public static final String SATTELITE          = "SATTELITE";
@@ -72,45 +84,70 @@ public final class ConfigUtils {
 	public static final String AGGREGATE_FUNCTION = "aggregate_function";
 	public static final String DATA_READ_TIMEOUT = "data_read_timeout";
 	
-	
+	public static final String DATA_FOLDERS = "data_folders";
+	public static final String CONSUMER_DATA_FOLDER = "consumer_data_folder";
+	public static final String PRODUCER_DATA_FOLDER = "producer_data_folder";
+
 	public static final String SERVER_TYPE = "server_type";
 	public static final String CONSUMER = "consumer";
 	public static final String PRODUCER = "producer";
 	public static final String DEFAULT_DATA_TIME_RESOLUTION  = "5s";
 	public static final String DEFAULT_AGGREGATE_FUNCTION = "max";
-	public static final String DEFAULT_WIFI_RESPONCE_TIME = "150";
-	public static final String DEFAULT_MIFI_RESPONCE_TIME = "200";
-	public static final String DEFAULT_SAT_RESPONCE_TIME = "10000";
+	public static final int DEFAULT_WIFI_RESPONCE_TIME = 150;
+	public static final int DEFAULT_MIFI_RESPONCE_TIME = 200;
+	public static final int DEFAULT_SAT_RESPONCE_TIME = 10000;	
+	public static final long DEFAULT_READ_FREQUNCY = 120000;
+	public static final long DEFAULT_PING_INTERVAL = 10000;
+	public static final long MAX_PING_INTERVAL = 180000;
+	public static final long DEFAULT_DATA_EXTRACT_INTERVAL = 20000;
+	public static final long DEFAULT_FILE_WATCHING_PERIOD = 10000;
+	public static final String DEFAULT_DATA_LOCATION = "./data_dumps";
+	public static final String DEFAULT_DATA_FILE_EXTENTION = "dd";
+
+	public static final long GLOBAL_ERROR = -99;
+
 	
     private static ConfigUtils instance = new ConfigUtils();
+    
+    private Map<String, Json> producers;
+    private Map<String, Json> consumers;
 	
 	private static final String HASH = "hash";
 	private static SecretKey key = MacProvider.generateKey();
 
 	private static Json conf;
 
-	private String wifi = DEFAULT_WIFI_RESPONCE_TIME;
-	private String mifi = DEFAULT_MIFI_RESPONCE_TIME;
-	private String sattelite = DEFAULT_SAT_RESPONCE_TIME;
+	private String pingHost;
+	private String pingTimeout;
+	private int wifi = DEFAULT_WIFI_RESPONCE_TIME;
+	private int mifi = DEFAULT_MIFI_RESPONCE_TIME;
+	private int sattelite = DEFAULT_SAT_RESPONCE_TIME;
 	private String time_resolution = DEFAULT_DATA_TIME_RESOLUTION;
 	private String aggregate_function = DEFAULT_AGGREGATE_FUNCTION; 
 	private String dataReadTimeout = DATA_READ_TIMEOUT;
 	private String dataSource;
 	private String serverType;
+	private String consumer_data_folder;
+	private String producer_data_folder;
 
 	private  Map<Integer, SynchConfigObject> transports = new TreeMap<Integer, SynchConfigObject>();
 
 	public class SynchConfigObject 
 	{
-		String name;     
-		String frequency;
-		String priority;
-		String useTransport;
-		Map<String, Object> configPropertiesProducer;
-		Map<String, Object> configPropertiesConsumer;
-		Class<?> consumerExecInstance;
-		Class<?> producerExecInstance;
-
+		private String name;     
+		private String frequency;
+		private String priority;
+		private String useTransport;
+		private int transportSpeed;
+		private Map<String, Object> configPropertiesProducer;
+		private Map<String, Object> configPropertiesConsumer;
+		private Class<SignalKCloudSynchService> consumerClass;
+		private Class<SignalKCloudSynchService> producerClass;
+		private Object producerInstance;
+		private Object consumerInstance;
+		private Method produceMethod;
+		private Method consumeMethod;
+		
 		long lastCommunication;
 		
 		public SynchConfigObject (String name, Json conf) throws Exception
@@ -120,56 +157,91 @@ public final class ConfigUtils {
 			priority =conf.at(TRANSPORT).asJsonMap().get(name).asJsonMap().get(PRIORITY).asString();
 			useTransport=conf.at(TRANSPORT).asJsonMap().get(name).asJsonMap().get(USE_TRANSPORT).asString().toUpperCase();
 			
-			configPropertiesConsumer= conf.at(name).asJsonMap().get(CONSUMER).asMap();
-			configPropertiesProducer= conf.at(name).asJsonMap().get(PRODUCER).asMap();
-			
-			String producerClassName=getProducerValue(CLASS_NAME);
-			if (producerClassName != null) {
+			if (useTransport.equals(ConfigUtils.WIFI) ) {
+				transportSpeed = DEFAULT_WIFI_RESPONCE_TIME;
+			}
+			else if (useTransport.equals(ConfigUtils.MIFI) ) {
+				transportSpeed = DEFAULT_MIFI_RESPONCE_TIME;
+			}
+			else
+				transportSpeed = DEFAULT_SAT_RESPONCE_TIME;
+				
+			if (instance.serverType.equals(PRODUCER)) {
+				configPropertiesProducer= conf.asJsonMap().get(PRODUCERS).asJsonMap().get(name) != null ? conf.asJsonMap().get(PRODUCERS).asJsonMap().get(name).asMap() : null;
 				try {
-					if (logger.isDebugEnabled())
-						logger.debug("Will instanciate producer {}", producerClassName );
-					Class<?> execInstance = Class.forName(producerClassName);
-	/*
-					Method setUpMethod = instance.getMethod("setUpTDb", String.class);
-					service = (TDBService) setUpMethod.invoke(null, dbName);
-					dbService.put(dbType + "-" + dbName, service);
-					return service;
-	*/
-					producerExecInstance=execInstance;
+					producerClass = SignalKCloudSynchServiceFactory.getProducer(getProducerValue(CLASS_NAME));
+					produceMethod = producerClass.getMethod("produce", Object.class);
+					producerInstance = producerClass.newInstance();					
 				}
 				catch (Throwable t) {
-					throw new Exception(t);
+					logger.error("SignalKCloudSynchServiceFactory - Error : {}. Producer.Class={}", 
+							t.getLocalizedMessage(), 
+							getProducerValue(CLASS_NAME)); 
+					t.printStackTrace();
 				}
 			}
-
-			String consumerrClassName=getProducerValue(CLASS_NAME);
-			if (producerClassName != null) {
+			else if (instance.serverType.equals(CONSUMER)) {
+				configPropertiesProducer= conf.asJsonMap().get(CONSUMERS).asJsonMap().get(name) != null ? conf.asJsonMap().get(PRODUCERS).asJsonMap().get(name).asMap() : null;
 				try {
-					if (logger.isDebugEnabled())
-						logger.debug("Will instanciate consumer {}", producerClassName );
-					Class<?> execInstance = Class.forName(producerClassName);
-	/*
-					Method setUpMethod = instance.getMethod("setUpTDb", String.class);
-					service = (TDBService) setUpMethod.invoke(null, dbName);
-					dbService.put(dbType + "-" + dbName, service);
-					return service;
-	*/
-					consumerExecInstance=execInstance;
+					consumerClass = SignalKCloudSynchServiceFactory.getConsumer(getConsumerValue(CLASS_NAME));
+					consumeMethod = consumerClass.getMethod("consume", Object.class);
+					consumerInstance = producerClass.newInstance();
 				}
 				catch (Throwable t) {
-					throw new Exception(t);
+					logger.error("SignalKCloudSynchServiceFactory - Error : {}. Consumer.Class=() ", 
+							t.getLocalizedMessage(), 
+							getConsumerValue(CLASS_NAME));
+					t.printStackTrace();
 				}
+			}
+			else {
+				throw new Exception ("Missing or unknown server type: "+instance.serverType);
+			}
+
+			
+
+			
+//			configPropertiesConsumer= conf.at(name).asJsonMap().get(CONSUMER) != null ? conf.at(name).asJsonMap().get(CONSUMER).asMap() : null;
+			configPropertiesProducer= conf.asJsonMap().get(PRODUCERS).asJsonMap().get(name) != null ? conf.asJsonMap().get(PRODUCERS).asJsonMap().get(name).asMap() : null;
+						
+			try {
+				producerClass = SignalKCloudSynchServiceFactory.getProducer(getProducerValue(CLASS_NAME));
+				produceMethod = producerClass.getMethod("produce", Object.class);
+				producerInstance = producerClass.newInstance();
+			}
+			catch (Throwable t) {
+				logger.error("SignalKCloudSynchServiceFactory - Error : {}. Producer.Class={}, Consumer.Class=() ", 
+						t.getLocalizedMessage(), 
+						getProducerValue(CLASS_NAME), 
+						getConsumerValue(CLASS_NAME));
+				t.printStackTrace();
+			}
+
+			try {
+				if (producerInstance != null) {
+					Method producerSetUp = producerClass.getMethod("setUpProducer", Map.class);
+					producerSetUp.invoke(producerInstance, configPropertiesProducer);
+				}
+				
+				if (consumerInstance != null) {
+					Method consumerSetUp = consumerClass.getMethod("setUpConsumer", Map.class);
+					consumerSetUp.invoke(consumerInstance, configPropertiesProducer);
+				}
+			}
+			catch (Throwable t) {
+				logger.error("SignalKCloudSynchServiceFactory - Error : {}", t.getLocalizedMessage());
+				t.printStackTrace();
 			}
 		}
 		
 		public String getConsumerValue(String param)
 		{
-			return String.valueOf(configPropertiesConsumer.get(param));
+			return (configPropertiesConsumer != null) ? String.valueOf(configPropertiesConsumer.get(param)) : null;
 		}
 		
 		public String getProducerValue(String param)
 		{
-			return String.valueOf(configPropertiesProducer.get(param));
+			return (configPropertiesProducer != null) ? String.valueOf(configPropertiesProducer.get(param)) : null;
 		}
 		
 		public String getName() {
@@ -182,6 +254,35 @@ public final class ConfigUtils {
 
 		public String getTransport() {
 			return useTransport;
+		}
+		public int getTransportSpeed() {
+			return transportSpeed;
+		}
+		
+		public Object consumerInstance() {
+			return consumerInstance;
+		}
+
+		public Object producerInstance() {
+			return producerInstance;
+		}
+
+		public Method produceMethod() {
+			return produceMethod;
+		}
+
+		public Method consumeMethod() {
+			return consumeMethod;
+		}
+
+		public Long invokeProduceMethod(Object obj) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+			
+			return (Long)produceMethod.invoke(producerInstance(), obj);
+		}
+
+		public void invokeConsumeMethod() throws IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+			
+			consumeMethod.invoke(consumerInstance());
 		}
 
 		public long getLastCommunication() {
@@ -205,15 +306,22 @@ public final class ConfigUtils {
 	{
 		Json conf = Json.read(body);
 
-		instance.wifi               = conf.asJsonMap().get(CONNECTION_SPEED).asJsonMap().get(WIFI).asString();
-		instance.mifi               = conf.asJsonMap().get(CONNECTION_SPEED).asJsonMap().get(MIFI).asString();
-		instance.sattelite          = conf.asJsonMap().get(CONNECTION_SPEED).asJsonMap().get(SATTELITE).asString();
+		instance.pingHost           = conf.asJsonMap().get(PING_SPEED).asJsonMap().get(HOST).asString();
+		instance.pingTimeout           = conf.asJsonMap().get(PING_SPEED).asJsonMap().get(TIMEOUT).asString();
+		instance.wifi               = Integer.parseInt(conf.asJsonMap().get(PING_SPEED).asJsonMap().get(WIFI).asString());
+		instance.mifi               = Integer.parseInt(conf.asJsonMap().get(PING_SPEED).asJsonMap().get(MIFI).asString());
+		instance.sattelite          = Integer.parseInt(conf.asJsonMap().get(PING_SPEED).asJsonMap().get(SATTELITE).asString());
 		instance.time_resolution    = conf.asJsonMap().get(EXTRACT_DATA).asJsonMap().get(TIME_RESOLUTION).asString();
 		instance.aggregate_function = conf.asJsonMap().get(EXTRACT_DATA).asJsonMap().get(AGGREGATE_FUNCTION).asString();
 		instance.dataSource         = conf.asJsonMap().get(EXTRACT_DATA).asJsonMap().get(DATA_SOURCE).asString();
 		instance.dataReadTimeout    = conf.asJsonMap().get(EXTRACT_DATA).asJsonMap().get(DATA_READ_TIMEOUT).asString();
+		instance.consumer_data_folder = conf.asJsonMap().get(DATA_FOLDERS).asJsonMap().get(CONSUMER_DATA_FOLDER).asString();
+		instance.producer_data_folder = conf.asJsonMap().get(DATA_FOLDERS).asJsonMap().get(PRODUCER_DATA_FOLDER).asString();
 		
 		instance.serverType         = conf.asJsonMap().get(SERVER_TYPE).asString();
+		if ( instance.serverType == null || ( !instance.serverType.equals(PRODUCER) && !instance.serverType.equals(CONSUMER))) {
+			throw new Exception ("Missing or unknown server type: "+instance.serverType);
+		}
 		
 		conf.at(TRANSPORT).asJsonMap().forEach((k,v) -> {
 			Json transport = v;
@@ -265,15 +373,25 @@ public final class ConfigUtils {
 		return conf;
 	}
 
-	public static String getWifi() {
+	public static String getPingHost()
+	{
+		return instance.pingHost;
+	}
+
+	public static String getPingTimeout()
+	{
+		return instance.pingTimeout;
+	}
+
+	public static int getWifi() {
 		return instance.wifi;
 	}
 
-	public static String getMifi() {
+	public static int getMifi() {
 		return instance.mifi;
 	}
 
-	public static String getSattelite() {
+	public static int getSattelite() {
 		return instance.sattelite;
 	}
 
@@ -293,6 +411,21 @@ public final class ConfigUtils {
 		return instance.dataReadTimeout;
 	}
 	
+	public static String getServerType()
+	{
+		return instance.serverType;
+	}
+
+	public static String getConsumerDataFolder()
+	{
+		return instance.consumer_data_folder;
+	}
+
+	public static String getProducerDataFolder()
+	{
+		return instance.producer_data_folder;
+	}
+
 	public static boolean isTokenBasedAuthentication(String authorizationHeader) {
 
 		// Check if the Authorization header is valid

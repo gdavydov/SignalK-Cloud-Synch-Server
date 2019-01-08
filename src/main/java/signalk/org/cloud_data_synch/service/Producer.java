@@ -1,5 +1,10 @@
-package signalk.org.cloud_data_synch.service.producers;
+package signalk.org.cloud_data_synch.service;
 
-public interface Producer {
+import java.lang.Exception;
 
+public interface Producer<T>
+{
+	default long produce(Object obj) throws Exception {
+		throw new Exception("Produce is not implemented");
+	}
 }

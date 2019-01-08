@@ -36,13 +36,72 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.InflaterInputStream;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public class ZipUtils {
+public class ZipUtils 
+{
 	private static Logger logger = LogManager.getLogger(ZipUtils.class);
+
+	public static void zipSingleFile(File sourceFile, File zipFile) {
+
+		try {
+			// create object of FileOutputStream
+			FileOutputStream fout = new FileOutputStream(zipFile);
+
+			// create object of ZipOutputStream from FileOutputStream
+			ZipOutputStream zout = new ZipOutputStream(fout);
+	        FileInputStream fis = new FileInputStream(sourceFile);
+	        ZipEntry zipEntry = new ZipEntry(sourceFile.getName());
+	        zout.putNextEntry(zipEntry);
+	        byte[] bytes = new byte[1024];
+	        int length;
+	        while((length = fis.read(bytes)) >= 0) {
+	            zout.write(bytes, 0, length);
+	        }
+	        zout.close();
+	        fis.close();
+	        fout.close();
+	        if (logger.isInfoEnabled())
+	        	logger.info("Zip file {} has been created!", zipFile.getName());
+
+		} catch (Exception e) {
+			logger.error(e.getMessage(), e);
+		}
+	}
+
+//	https://www.quora.com/What-is-a-good-Java-library-to-zip-unzip-files
+	/**
+	 * ANothe method to zip single file
+	 * @param sourceFile
+	 * @param zipFile
+	 */
+	public static void zinSingleFile(File sourceFile, File zipFile) {
+
+		try {
+			// create object of FileOutputStream
+			// create object of ZipOutputStream from FileOutputStream
+			DeflaterOutputStream zout = new DeflaterOutputStream(new FileOutputStream(zipFile));
+	        FileInputStream fis = new FileInputStream(sourceFile);
+	        byte[] bytes = new byte[1024];
+	        int length;
+	        while((length = fis.read(bytes)) >= 0) {
+	            zout.write(bytes, 0, length);
+	        }
+	        zout.close();
+	        fis.close();
+	        if (logger.isInfoEnabled())
+	        	logger.info("Zip file {} has been created!", zipFile.getName());
+
+		} catch (Exception e) {
+			logger.error(e.getMessage(), e);
+		}
+
+	}
 
 	public static void zip(File sourceDir, File zipFile) {
 
@@ -145,5 +204,29 @@ public class ZipUtils {
 			
 		}
 		zip.close();
+	}
+	
+	/** Unzip a zipFile into a directory
+	 * @param targetDir
+	 * @param zipFile
+	 * @throws ZipException
+	 * @throws IOException
+	 */
+	public static void unzinSingleFile(File targetDir, File zipFile) throws ZipException, IOException
+	{
+		@SuppressWarnings("unchecked")
+		InflaterInputStream zis= new InflaterInputStream(new FileInputStream(zipFile));
+		FileOutputStream fout= new FileOutputStream(targetDir.getCanonicalPath()+"/"+zipFile.getName()+".unzip");
+		
+        byte[] bytes = new byte[1024];
+        int length;
+        while((length = zis.read(bytes)) >= 0) {
+            fout.write(bytes, 0, length);
+        }
+        fout.close();
+        zis.close();
+        if (logger.isInfoEnabled())
+        	logger.info("Zip file {} has been created!", zipFile.getName());
+
 	}
 }

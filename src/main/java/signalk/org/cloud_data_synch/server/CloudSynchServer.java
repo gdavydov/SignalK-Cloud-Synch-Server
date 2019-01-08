@@ -17,6 +17,7 @@ package signalk.org.cloud_data_synch.server;
  */
 
 import static signalk.org.cloud_data_synch.utils.ConfigConstants.ENABLE_SERIAL;
+
 import static signalk.org.cloud_data_synch.utils.ConfigConstants.GENERATE_NMEA0183;
 import static signalk.org.cloud_data_synch.utils.ConfigConstants.OUTPUT_NMEA;
 import static signalk.org.cloud_data_synch.utils.ConfigConstants.OUTPUT_TCP;
@@ -31,12 +32,19 @@ import static signalk.org.cloud_data_synch.utils.ConfigConstants.WEBSOCKET_PORT;
 import static signalk.org.cloud_data_synch.utils.SignalKConstants.SIGNALK_DISCOVERY;
 import static signalk.org.cloud_data_synch.utils.SignalKConstants._SIGNALK_HTTP_TCP_LOCAL;
 import static signalk.org.cloud_data_synch.utils.SignalKConstants._SIGNALK_WS_TCP_LOCAL;
+import static signalk.org.cloud_data_synch.utils.ConfigUtils.DEFAULT_DATA_LOCATION;
+import static signalk.org.cloud_data_synch.utils.ConfigUtils.DEFAULT_READ_FREQUNCY;
+
+
 
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -75,6 +83,7 @@ import signalk.org.cloud_data_synch.service.InfluxDbService;
 import signalk.org.cloud_data_synch.utils.Config;
 import signalk.org.cloud_data_synch.utils.ConfigUtils;
 import signalk.org.cloud_data_synch.utils.ConfigUtils.SynchConfigObject;
+import signalk.org.cloud_data_synch.utils.FileWatcher;
 import signalk.org.cloud_data_synch.utils.SecurityUtils;
 import signalk.org.cloud_data_synch.utils.Util;
 
@@ -97,8 +106,8 @@ public final class CloudSynchServer {
 	private ClientSession session;
 	private ClientConsumer consumer;
 	
-	private CloudSynchService synchServce;
-
+	private CloudSynchService synchService;
+	
 	public CloudSynchServer() throws Exception {
 		init(null);
 	}
@@ -109,7 +118,8 @@ public final class CloudSynchServer {
 	}
 	
 	@SuppressWarnings("static-access")
-	private void init(String configFileName) throws Exception{
+	private void init(String configFileName) throws Exception
+	{
 		
 		long startTm = (new Date()).getTime();
 				
@@ -124,8 +134,8 @@ public final class CloudSynchServer {
 		
 		getServerConfig(configFileName);
 		
-		synchServce = new CloudSynchService();
-		synchServce.init();
+		synchService = new CloudSynchService();
+		synchService.init();
 		
 //		Config config = Config.getInstance();
 //		config.getTDBService(Config.dbName, Config.dbType);
@@ -354,132 +364,62 @@ public final class CloudSynchServer {
 		}
 	}
 	
-	public NavigableMap<String, Json> extractData(NavigableMap<String, Json> dataMap) throws Exception
+	private void startMe() throws Exception
 	{
-		if (dataMap == null)
-			dataMap = new ConcurrentSkipListMap<>();
-		
-		try {
-			synchServce.extractData(dataMap);
-		}
-		catch (Exception e) {
-			logger.error("Data extract Error : {}", e.getLocalizedMessage());
-			throw e;
-		}
-		return dataMap;
-	}
-
-	private void startMe() {
 		// DNS-SD
 		// NetworkTopologyDiscovery netTop =
 		// NetworkTopologyDiscovery.Factory.getInstance();
 
-		Runnable r = new Runnable() {
-			private volatile boolean stop = false;
+		boolean stop = false;
 
-			int wifi = Integer.parseInt(ConfigUtils.getWifi());
-			int mifi = Integer.parseInt(ConfigUtils.getMifi());
-			int satellite = Integer.parseInt(ConfigUtils.getSattelite());
+		Map<Integer, SynchConfigObject> _map = ConfigUtils.getTransports();
 
-			boolean useWiFi = false;
-			boolean useMiFi = false;
-			boolean useSattelite = false;
+		NavigableMap<String, Json> dataMap = new ConcurrentSkipListMap<>();
 
-			Map<Integer, SynchConfigObject> _map = ConfigUtils.getTransports();
+		/**
+		 * TOT make is ad producer default folder
+		 */
+		String dataFolder = ConfigUtils.DEFAULT_DATA_LOCATION;
+		
+		if (ConfigUtils.getServerType().equals(ConfigUtils.PRODUCER)) {
+			dataFolder = ConfigUtils.getProducerDataFolder();
+		}
+		else if (ConfigUtils.getServerType().equals(ConfigUtils.CONSUMER)) {
+			dataFolder = ConfigUtils.getConsumerDataFolder();
+		}
+		File dir = new File(dataFolder);
+		if(!dir.exists())
+		   dir.mkdir();
 
-			NavigableMap<String, Json> dataMap = new ConcurrentSkipListMap<>();
-
-			@Override
-			public void run() {
-				while (!stop) {
-					// ** Map<Integer, SynchConfigObject> _map = new TreeMap<Integer, SynchConfigObject>(ConfigUtils.getTransports());
-					/**
-					 * jmdns = JmmDNS.Factory.getInstance();
-					 * 
-					 * jmdns.registerServiceType(_SIGNALK_WS_TCP_LOCAL);
-					 * jmdns.registerServiceType(_SIGNALK_HTTP_TCP_LOCAL);
-					 * ServiceInfo wsInfo =
-					 * ServiceInfo.create(_SIGNALK_WS_TCP_LOCAL, "signalk-ws",
-					 * Config.getConfigPropertyInt(WEBSOCKET_PORT), 0, 0,
-					 * getMdnsTxt());
-					 */
-					/// *** dataMap.clear();
-					/**
-					 * Get database extracts here
-					 */
-					try {
-						extractData(dataMap);
-					}
-					catch (Exception e) {
-						logger.error("Data extract Error : {}", e.getLocalizedMessage());
-						stop = true;
-					}
-					if (!stop) {
-						/**
-						 * Find suitable transport here
-						 */
-
-						for (int priority = 0; priority < _map.size(); priority++) {
-							SynchConfigObject _synchTransport = _map.get(priority);
-							String useTransport = _synchTransport.getTransport();
-
-							int pingms = synchServce.ping(_synchTransport);
-							/**
-							 * Find suitable transport here
-							 */
-							if (pingms <= wifi)
-								useWiFi = true;
-							else if (pingms <= mifi)
-								useMiFi = true;
-							else
-								useSattelite = true;
-
-							switch (useTransport) {
-							case ConfigUtils.WIFI:
-								if (useWiFi) {
-									logger.info("will use WiFi for {} transport", _synchTransport.getName());
-									synchServce.sendData(_synchTransport);
-								}
-								break;
-							case ConfigUtils.MIFI:
-								if (useMiFi) {
-									logger.info("will use MiFi for {} transport", _synchTransport.getName());
-									synchServce.sendData(_synchTransport);
-								}
-								break;
-							case ConfigUtils.SATTELITE:
-								logger.info("will use Sattelite for {} transport", _synchTransport.getName());
-								synchServce.sendData(_synchTransport);
-								break;
-							default:
-								synchServce.sendData(_synchTransport);
-								break;
-							}
-
-						}
-
-						dataMap.clear();
-
-						try {
-							// jmdns.registerService(wsInfo);
-							ServiceInfo httpInfo = ServiceInfo.create(_SIGNALK_HTTP_TCP_LOCAL, "signalk-http",
-							        Config.getConfigPropertyInt(REST_PORT), 0, 0, getMdnsTxt());
-							jmdns.registerService(httpInfo);
-						}
-						catch (IOException e) {
-							e.printStackTrace();
-						}
-						useWiFi = false;
-						useMiFi = false;
-						useSattelite = false;
-					}
-				}
+		dir = new File(dataFolder+"/process");
+		if(!dir.exists())
+		   dir.mkdir();
+			
+		try {
+			if (ConfigUtils.getServerType().equals(ConfigUtils.PRODUCER)) {
+				
+				synchService.startPinger();
+				synchService.startProducer();
+				/**
+				 * Get database extracts here
+				 */
+				synchService.startSchDataExtract(); // Scheduled Threaded version
+//				synchService.startDataExtract(); // Threaded version
+//				synchServce.extractData(new ConcurrentSkipListMap<>()); // non threaded version
 			}
-		};
-		Thread t = new Thread(r);
-		t.setDaemon(true);
-		t.start();
-
+			else if (ConfigUtils.getServerType().equals(ConfigUtils.CONSUMER)) {
+				(new FileWatcher()).startDirectoryLister(dataFolder);
+//				synchService.startProducer();
+			}
+			else {
+				throw new Exception("Unknown Servicr type: "+ConfigUtils.getServerType());
+			}
+		}
+		catch (Exception e) {
+			logger.error("Data extract Error : {}", e.getLocalizedMessage());
+			stop = true;
+			e.printStackTrace();
+		}
 	}
 
 	private void startMdns() {
